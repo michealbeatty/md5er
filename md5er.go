@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //RecursiveHash will perform the MD5 operation recursively beginning with the
@@ -34,10 +35,37 @@ func recursiveHash(dir string, fout string) {
 
 			s := hex.EncodeToString(value[:]) + " *" + rel + "\n"
 			f.WriteString(s)
-			//fmt.Println(path, file.Name())
 		}
 		return nil
 	})
+	f.Sync()
+}
+
+func cwdHash(dir string, fout string) {
+	f, err := os.Create(fout)
+	if err != nil {
+		log.Print(err)
+	}
+	defer f.Close()
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Print(err)
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			fileData, err := ioutil.ReadFile(file.Name())
+			if err != nil {
+				log.Print(err)
+			}
+			fmt.Printf("%x *%s\n", md5.Sum(fileData), file.Name())
+			value := md5.Sum(fileData)
+
+			s := hex.EncodeToString(value[:]) + " *" + file.Name() + "\n"
+			f.WriteString(s)
+		}
+	}
+
 	f.Sync()
 }
 
@@ -47,12 +75,18 @@ func main() {
 		log.Print(err)
 	}
 	base := filepath.Base(cwd)
+
+	recursive := flag.Bool("r", false, "crawl the directory recursively")
 	fname := flag.String("o", base+".md5", "name of output file (should have md5 extension")
 	flag.Parse()
-	recursiveHash(cwd, *fname)
+	if !strings.HasSuffix(*fname, ".md5") {
+		*fname += ".md5"
+		log.Print("Appending .md5 extension to given filename")
+	}
+	if *recursive {
+		recursiveHash(cwd, *fname)
+	} else {
+		fmt.Println("not recursive")
+		cwdHash(cwd, *fname)
+	}
 }
-
-// TODO: add flag to allow user to specify if it should be recursive or not.
-// If not recursive, should be only the contents of the current directory
-// TODO: write results to file user should be able to specify a file name or default
-// to root directory name. THis will use ioutil.WriteFile()
